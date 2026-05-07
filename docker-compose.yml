@@ -1,0 +1,65 @@
+version: '3.9'
+
+# ──────────────────────────────────────
+# REDES
+# ──────────────────────────────────────
+networks:
+  java-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ──────────────────────────────────────
+# VOLÚMENES
+# ──────────────────────────────────────
+volumes:
+  mysql-data:
+    driver: local
+
+# ──────────────────────────────────────
+# SERVICIOS
+# ──────────────────────────────────────
+services:
+
+  # ── MySQL ──────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-container
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root1234
+      MYSQL_DATABASE: appdb
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: apppass
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - '3306:3306'
+    networks:
+      - java-net
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-proot1234']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Payara Server ───────────────────
+  payara:
+    image: payara/server-full:6.2024.6
+    container_name: payara-container
+    restart: unless-stopped
+    environment:
+      PAYARA_PASSWORD: admin1234
+    ports:
+      - '8080:8080'   # HTTP aplicaciones Java
+      - '4848:4848'   # Admin Console (GUI)
+      - '9009:9009'   # Debug remoto Java (JDWP)
+    networks:
+      - java-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./payara/deployments:/opt/payara/deployments
